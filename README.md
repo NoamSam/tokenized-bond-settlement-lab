@@ -27,3 +27,15 @@ GET    /api/bond-orders/<id>/
 PATCH  /api/bond-orders/<id>/
 DELETE /api/bond-orders/<id>/
 ```
+
+Swagger UI:
+
+```text
+GET /api/docs/
+```
+
+OpenAPI schema:
+
+```text
+GET /api/schema/
+```

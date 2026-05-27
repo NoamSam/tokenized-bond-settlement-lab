@@ -1,12 +1,19 @@
-from rest_framework import generics, mixins
+from rest_framework import generics
+from rest_framework.mixins import (
+    CreateModelMixin,
+    DestroyModelMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+)
 
 from .models import BondOrder
 from .serializers import BondOrderSerializer
 
 
 class BondOrderListCreateView(
-    mixins.ListModelMixin,
-    mixins.CreateModelMixin,
+    ListModelMixin,
+    CreateModelMixin,
     generics.GenericAPIView,
 ):
     queryset = BondOrder.objects.order_by('-created_at')
@@ -20,9 +27,9 @@ class BondOrderListCreateView(
 
 
 class BondOrderDetailView(
-    mixins.RetrieveModelMixin,
-    mixins.UpdateModelMixin,
-    mixins.DestroyModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+    DestroyModelMixin,
     generics.GenericAPIView,
 ):
     queryset = BondOrder.objects.all()
