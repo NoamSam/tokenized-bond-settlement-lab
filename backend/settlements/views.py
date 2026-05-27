@@ -16,7 +16,7 @@ class BondOrderListCreateView(
     CreateModelMixin,
     generics.GenericAPIView,
 ):
-    queryset = BondOrder.objects.order_by('-created_at')
+    queryset = BondOrder.objects.order_by("-created_at")
     serializer_class = BondOrderSerializer
 
     def get(self, request, *args, **kwargs):
