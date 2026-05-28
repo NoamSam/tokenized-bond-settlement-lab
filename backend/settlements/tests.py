@@ -1,6 +1,9 @@
+from django.core.management import call_command
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from .models import Bond, BondOrder, Investor, SettlementMessage, SettlementTransaction
 
 
 class SettlementWorkflowApiTests(APITestCase):
@@ -56,15 +59,7 @@ class SettlementWorkflowApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         return response.data
 
-    def test_create_bond_order_from_investor_and_bond(self):
-        order = self.create_order()
-
-        self.assertEqual(order["bond_detail"]["symbol"], "BOND2027")
-        self.assertEqual(order["investor_detail"]["kyc_status"], "verified")
-        self.assertEqual(order["status"], "pending")
-        self.assertEqual(order["total_amount"], "2000.00")
-
-    def test_create_settlement_transaction_for_order(self):
+    def create_settlement_transaction(self):
         order = self.create_order()
 
         response = self.client.post(
@@ -83,9 +78,42 @@ class SettlementWorkflowApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["order_detail"]["id"], order["id"])
-        self.assertEqual(response.data["chain"], "local_ethereum")
-        self.assertEqual(response.data["status"], "confirmed")
+        return response.data
+
+    def test_create_bond_order_from_investor_and_bond(self):
+        order = self.create_order()
+
+        self.assertEqual(order["bond_detail"]["symbol"], "BOND2027")
+        self.assertEqual(order["investor_detail"]["kyc_status"], "verified")
+        self.assertEqual(order["status"], "pending")
+        self.assertEqual(order["total_amount"], "2000.00")
+
+    def test_create_settlement_transaction_for_order(self):
+        transaction = self.create_settlement_transaction()
+
+        self.assertEqual(
+            transaction["order_detail"]["bond_detail"]["symbol"], "BOND2027"
+        )
+        self.assertEqual(transaction["chain"], "local_ethereum")
+        self.assertEqual(transaction["status"], "confirmed")
+
+    def test_generate_iso20022_style_settlement_message(self):
+        transaction = self.create_settlement_transaction()
+
+        response = self.client.post(
+            reverse("settlement-message-list"),
+            {
+                "settlement_transaction": transaction["id"],
+                "message_type": "camt.054",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["message_id"], f"CAMT054-TX-{transaction['id']}")
+        self.assertIn("<Document>", response.data["xml_payload"])
+        self.assertIn("BOND2027", response.data["xml_payload"])
+        self.assertIn(transaction["transaction_hash"], response.data["xml_payload"])
 
     def test_list_bond_orders_starts_empty(self):
         response = self.client.get(reverse("bond-order-list"))
@@ -104,3 +132,20 @@ class ApiDocumentationTests(APITestCase):
         response = self.client.get(reverse("swagger-ui"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class SeedDemoDataCommandTests(APITestCase):
+    def test_seed_demo_data_command_creates_demo_workflow(self):
+        call_command("seed_demo_data")
+
+        self.assertEqual(Investor.objects.count(), 1)
+        self.assertEqual(Bond.objects.count(), 1)
+        self.assertEqual(BondOrder.objects.count(), 1)
+        self.assertEqual(SettlementTransaction.objects.count(), 1)
+        self.assertEqual(SettlementMessage.objects.count(), 1)
+
+        order = BondOrder.objects.select_related("investor", "bond").get()
+        self.assertEqual(order.investor.kyc_status, Investor.KycStatus.VERIFIED)
+        self.assertEqual(order.bond.symbol, "BOND2027")
+        self.assertEqual(order.status, BondOrder.Status.SETTLED)
+        self.assertEqual(order.total_amount, 2000)

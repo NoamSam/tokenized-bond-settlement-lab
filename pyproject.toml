@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 88
+exclude = [
+    ".venv",
+    "backend/db.sqlite3",
+    "backend/settlements/migrations",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+]

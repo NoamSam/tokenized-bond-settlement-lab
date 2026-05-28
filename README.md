@@ -21,12 +21,41 @@ Investor
 Bond
 BondOrder
 SettlementTransaction
+SettlementMessage
+```
+
+The `settlements` app is split by domain:
+
+```text
+settlements/models/investors.py
+settlements/models/bonds.py
+settlements/models/bond_orders.py
+settlements/models/settlement_transactions.py
+settlements/models/settlement_messages.py
+
+settlements/views/investors.py
+settlements/views/bonds.py
+settlements/views/bond_orders.py
+settlements/views/settlement_transactions.py
+settlements/views/settlement_messages.py
+
+settlements/serializers/investors.py
+settlements/serializers/bonds.py
+settlements/serializers/bond_orders.py
+settlements/serializers/settlement_transactions.py
+settlements/serializers/settlement_messages.py
 ```
 
 ```bash
 source .venv/bin/activate
 cd backend
 python manage.py runserver
+```
+
+Create demo data for Swagger:
+
+```bash
+python manage.py seed_demo_data
 ```
 
 API:
@@ -51,7 +80,16 @@ GET    /api/settlement-transactions/
 POST   /api/settlement-transactions/
 GET    /api/settlement-transactions/<id>/
 PATCH  /api/settlement-transactions/<id>/
+
+GET    /api/settlement-messages/
+POST   /api/settlement-messages/
+GET    /api/settlement-messages/<id>/
 ```
+
+`SettlementMessage` generates an ISO 20022-style `camt.054` XML payload from a
+settlement transaction. This is intentionally simplified for learning; it shows
+how blockchain settlement data can be transformed into a traditional finance
+message shape.
 
 Swagger UI:
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Bond, BondOrder, Investor, SettlementTransaction
+from .models import Bond, BondOrder, Investor, SettlementMessage, SettlementTransaction
 
 
 @admin.register(Investor)
@@ -57,3 +57,16 @@ class SettlementTransactionAdmin(admin.ModelAdmin):
     )
     list_filter = ("chain", "status")
     search_fields = ("transaction_hash", "order__bond__symbol")
+
+
+@admin.register(SettlementMessage)
+class SettlementMessageAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "settlement_transaction",
+        "message_type",
+        "message_id",
+        "created_at",
+    )
+    list_filter = ("message_type",)
+    search_fields = ("message_id", "settlement_transaction__transaction_hash")

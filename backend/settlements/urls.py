@@ -7,6 +7,8 @@ from .views import (
     BondOrderListCreateView,
     InvestorDetailView,
     InvestorListCreateView,
+    SettlementMessageDetailView,
+    SettlementMessageListCreateView,
     SettlementTransactionDetailView,
     SettlementTransactionListCreateView,
 )
@@ -29,5 +31,15 @@ urlpatterns = [
         "settlement-transactions/<int:pk>/",
         SettlementTransactionDetailView.as_view(),
         name="settlement-transaction-detail",
+    ),
+    path(
+        "settlement-messages/",
+        SettlementMessageListCreateView.as_view(),
+        name="settlement-message-list",
+    ),
+    path(
+        "settlement-messages/<int:pk>/",
+        SettlementMessageDetailView.as_view(),
+        name="settlement-message-detail",
     ),
 ]
