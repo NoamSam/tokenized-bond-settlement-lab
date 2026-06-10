@@ -149,3 +149,54 @@ class SeedDemoDataCommandTests(APITestCase):
         self.assertEqual(order.bond.symbol, "BOND2027")
         self.assertEqual(order.status, BondOrder.Status.SETTLED)
         self.assertEqual(order.total_amount, 2000)
+
+
+class RecordOnchainSettlementCommandTests(APITestCase):
+    def test_records_transaction_message_and_settles_order(self):
+        investor = Investor.objects.create(
+            display_name="Alice Investor",
+            wallet_address="0x1111111111111111111111111111111111111111",
+            kyc_status=Investor.KycStatus.VERIFIED,
+        )
+        bond = Bond.objects.create(
+            symbol="BOND2027",
+            name="Tokenized EUR Bond 2027",
+            issuer_name="Demo Issuer",
+            issuer_wallet="0x2222222222222222222222222222222222222222",
+            face_value="1000.00",
+            maturity_date="2027-12-31",
+            total_supply=1000,
+        )
+        order = BondOrder.objects.create(investor=investor, bond=bond, quantity=2)
+
+        tx_hash = "0x" + "f" * 64
+        call_command(
+            "record_onchain_settlement",
+            order_id=order.pk,
+            tx_hash=tx_hash,
+            block_number=7,
+            gas_used=111910,
+        )
+
+        order.refresh_from_db()
+        transaction = SettlementTransaction.objects.get(order=order)
+        message = SettlementMessage.objects.get(settlement_transaction=transaction)
+
+        self.assertEqual(order.status, BondOrder.Status.SETTLED)
+        self.assertEqual(transaction.status, SettlementTransaction.Status.CONFIRMED)
+        self.assertEqual(transaction.transaction_hash, tx_hash)
+        self.assertEqual(transaction.block_number, 7)
+        self.assertIsNotNone(transaction.settled_at)
+        self.assertEqual(message.message_id, f"CAMT054-TX-{transaction.id}")
+        self.assertIn(tx_hash, message.xml_payload)
+
+    def test_fails_for_unknown_order(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError):
+            call_command(
+                "record_onchain_settlement",
+                order_id=999,
+                tx_hash="0x" + "a" * 64,
+                block_number=1,
+            )

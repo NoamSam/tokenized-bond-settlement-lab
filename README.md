@@ -14,7 +14,7 @@ The core idea: when a bond trade settles on a blockchain, back-office, complianc
 Investor onboarding (KYC) ──► Bond issuance ──► Purchase order
                                                       │
                                                       ▼
-                              On-chain settlement (tx hash, block, gas)
+                              On-chain atomic DvP (Solidity, Hardhat)
                                                       │
                                                       ▼
                               ISO 20022-style camt.054 settlement message
@@ -100,10 +100,39 @@ Run the test suite:
 python manage.py test
 ```
 
+## On-chain DvP settlement (`chain/`)
+
+Solidity contracts (Hardhat + OpenZeppelin) implementing atomic Delivery-versus-Payment:
+
+| Contract | Role |
+|---|---|
+| `BondToken` | ERC-20 bond units (0 decimals), full supply minted to the issuer |
+| `FakeEuroStablecoin` | ERC-20 demo cash leg, 2 decimals (euro cents), open faucet |
+| `DvPSettlement` | Atomic swap of both legs in one transaction; reverts entirely if either leg fails (BIS model 1: no principal risk). Tracks settled off-chain order ids and emits `SettlementExecuted` |
+
+```bash
+cd chain
+npm ci
+npx hardhat test          # 9 tests: happy path, atomicity, access control, replay protection
+npx hardhat run scripts/settle-demo.js
+```
+
+The demo script prints a JSON settlement receipt that feeds straight into the backend:
+
+```bash
+cd backend
+python manage.py record_onchain_settlement \
+    --order-id 1 \
+    --tx-hash 0xf248...17c1 \
+    --block-number 7 --gas-used 111910
+```
+
+This confirms the `SettlementTransaction`, flips the `BondOrder` to `settled`, and generates the camt.054 message, closing the loop between on-chain settlement and traditional post-trade reporting.
+
 ## Roadmap
 
-- [ ] Solidity contracts for atomic DvP (bond token vs stablecoin) on a local Hardhat network
-- [ ] Backend listener storing real transaction hashes from contract events
+- [x] Solidity contracts for atomic DvP (bond token vs stablecoin) on a local Hardhat network
+- [x] Backend command recording on-chain settlements (tx hash, block) against the order book
 - [ ] React dashboard for the order/settlement lifecycle
 - [ ] PostgreSQL + dockerized environment
 
