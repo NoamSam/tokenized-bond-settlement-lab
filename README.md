@@ -1,104 +1,112 @@
 # Tokenized Bond Settlement Lab
 
-Beginner-friendly SG-FORGE-oriented project.
+[![CI](https://github.com/NoamSam/Crypto/actions/workflows/ci.yml/badge.svg)](https://github.com/NoamSam/Crypto/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![Django](https://img.shields.io/badge/Django-6.0-092E20?logo=django)
+![DRF](https://img.shields.io/badge/DRF-3.17-red)
+![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230)
 
-This repository is a local simulation of a tokenized bond settlement flow:
+A backend simulating the **settlement of a tokenized bond against a stablecoin**, bridging on-chain settlement data with traditional post-trade infrastructure (ISO 20022-style reporting).
 
-1. An issuer creates a bond product.
-2. An investor with a wallet address creates a purchase order.
-3. A backend records the off-chain business state.
-4. Later, smart contracts will settle fake EUR stablecoin against fake bond tokens.
-5. The backend stores the blockchain transaction hash and settlement status.
+The core idea: when a bond trade settles on a blockchain, back-office, compliance and audit systems still need the transaction in a format they understand. This project models that full flow.
 
-## Backend
-
-The backend is Django + Django REST Framework using mixins.
-
-Current domain models:
-
-```text
-Investor
-Bond
-BondOrder
-SettlementTransaction
-SettlementMessage
+```
+Investor onboarding (KYC) ──► Bond issuance ──► Purchase order
+                                                      │
+                                                      ▼
+                              On-chain settlement (tx hash, block, gas)
+                                                      │
+                                                      ▼
+                              ISO 20022-style camt.054 settlement message
 ```
 
-The `settlements` app is split by domain:
+> ⚠️ This is a learning/portfolio project: settlement is simulated locally and the camt.054 payload is a simplified educational rendition of the standard, not a certified implementation.
 
-```text
-settlements/models/investors.py
-settlements/models/bonds.py
-settlements/models/bond_orders.py
-settlements/models/settlement_transactions.py
-settlements/models/settlement_messages.py
+## Domain model
 
-settlements/views/investors.py
-settlements/views/bonds.py
-settlements/views/bond_orders.py
-settlements/views/settlement_transactions.py
-settlements/views/settlement_messages.py
+| Model | Role |
+|---|---|
+| `Investor` | Wallet address + KYC status (pending / verified / rejected) |
+| `Bond` | ISIN, issuer, face value, coupon, maturity, total supply |
+| `BondOrder` | Purchase order with full status lifecycle (pending → settlement_submitted → settled / failed / cancelled) |
+| `SettlementTransaction` | On-chain trace: chain, transaction hash, block number, gas used |
+| `SettlementMessage` | Generated camt.054-style XML notification, persisted for audit |
 
-settlements/serializers/investors.py
-settlements/serializers/bonds.py
-settlements/serializers/bond_orders.py
-settlements/serializers/settlement_transactions.py
-settlements/serializers/settlement_messages.py
+## API
+
+Full CRUD on every resource, documented with Swagger / OpenAPI 3.
+
 ```
+/api/investors/                  /api/investors/<id>/
+/api/bonds/                      /api/bonds/<id>/
+/api/bond-orders/                /api/bond-orders/<id>/
+/api/settlement-transactions/    /api/settlement-transactions/<id>/
+/api/settlement-messages/        /api/settlement-messages/<id>/
+
+/api/docs/      Swagger UI
+/api/schema/    OpenAPI schema
+```
+
+Creating a `SettlementMessage` from a confirmed `SettlementTransaction` generates and stores the XML payload:
+
+```xml
+<Document>
+  <BkToCstmrDbtCdtNtfctn>
+    <GrpHdr>
+      <MsgId>CAMT054-TX-1</MsgId>
+      ...
+    </GrpHdr>
+    <Ntfctn>
+      <Ntry>
+        <Amt Ccy="EUR">2000.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <AddtlNtryInf>Tokenized bond settlement for 2 BOND2027 against FAKEUR on local_ethereum</AddtlNtryInf>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>0xaaaa…aaaa</AcctSvcrRef>
+              <EndToEndId>ORDER-1</EndToEndId>
+            </Refs>
+            ...
+```
+
+## Tech stack & engineering practices
+
+- **Python 3.12, Django 6, Django REST Framework** (generic views + explicit mixins)
+- **drf-spectacular** for OpenAPI 3 schema and Swagger UI
+- **Domain-driven layout**: `models/`, `views/`, `serializers/` split per business entity
+- **Optimized queries**: `select_related` on all FK-heavy endpoints
+- **7 API integration tests** covering the full workflow (order → settlement → camt.054 generation) plus schema/docs availability
+- **Ruff** linting (pycodestyle, pyflakes, isort) enforced in CI
+- **Seed command** (`seed_demo_data`) for instant demo data
+
+## Quickstart
 
 ```bash
-source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
 cd backend
+python manage.py migrate
+python manage.py seed_demo_data
 python manage.py runserver
 ```
 
-Create demo data for Swagger:
+Then open http://127.0.0.1:8000/api/docs/
+
+Run the test suite:
 
 ```bash
-python manage.py seed_demo_data
+python manage.py test
 ```
 
-API:
+## Roadmap
 
-```text
-GET    /api/investors/
-POST   /api/investors/
-GET    /api/investors/<id>/
-PATCH  /api/investors/<id>/
+- [ ] Solidity contracts for atomic DvP (bond token vs stablecoin) on a local Hardhat network
+- [ ] Backend listener storing real transaction hashes from contract events
+- [ ] React dashboard for the order/settlement lifecycle
+- [ ] PostgreSQL + dockerized environment
 
-GET    /api/bonds/
-POST   /api/bonds/
-GET    /api/bonds/<id>/
-PATCH  /api/bonds/<id>/
+## License
 
-GET    /api/bond-orders/
-POST   /api/bond-orders/
-GET    /api/bond-orders/<id>/
-PATCH  /api/bond-orders/<id>/
-
-GET    /api/settlement-transactions/
-POST   /api/settlement-transactions/
-GET    /api/settlement-transactions/<id>/
-PATCH  /api/settlement-transactions/<id>/
-
-GET    /api/settlement-messages/
-POST   /api/settlement-messages/
-GET    /api/settlement-messages/<id>/
-```
-
-`SettlementMessage` generates an ISO 20022-style `camt.054` XML payload from a
-settlement transaction. This is intentionally simplified for learning; it shows
-how blockchain settlement data can be transformed into a traditional finance
-message shape.
-
-Swagger UI:
-
-```text
-GET /api/docs/
-```
-
-OpenAPI schema:
-
-```text
-GET /api/schema/
-```
+MIT
